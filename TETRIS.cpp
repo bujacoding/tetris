@@ -5,16 +5,20 @@
 #include <iostream>
 #include <mmsystem.h>
 #pragma comment(lib,"winmm.lib")
+#include <fstream>
+using namespace std;
 
+int highScore = 0;
+int spawnMoveable = 0;
 
-int key_up = 72;
-int key_down = 115;
-int key_right = 77;
-int key_left = 75;
-int key_super_down = 119;
-int spacebar = 32;
-int key_speed_down = 80;
-int hold = 9;
+const int key_up = 72;
+const int key_down = 115;
+const int key_right = 77;
+const int key_left = 75;
+const int key_super_down = 119;
+const int spacebar = 32;
+const int key_speed_down = 80;
+const int hold = 9;
 
 const int width = 12;
 const int height = 24 + 4;
@@ -198,9 +202,18 @@ void draw_letter(char* character, int color, int x, int y, int* letter, int leng
 	}
 }
 
+int toint(char* number) {
+	int result = 0;
+	for (;*number; number++)
+	{
+		result = result * 10 + *number - 48;
+	}
+	return result;
+}
+
+
 void spawn(Tetrominoes* falling_tetrominoes, int* game);
 void getGhost(Tetrominoes* falling_tetrominoes);
-
 
 int timer = 0;
 int timer2 = 0;
@@ -219,21 +232,40 @@ int lines = 0;
 
 int blink = 0;
 
-int main()
-{
 
-	//game setting
-	/* { move: <-, ->, rotate : up_arrow, s, drop : w, move down : down_arrow, hold : tap } */
-	
+void initialize() {
+	timer = 0;
+	timer2 = 0;
+	timer3 = 0;
+	score = 0;
+	level = 1;
+	delay = 64;
+	level_next = 0;
+	isBreaking = 0;
+	checkSinkY = 0;
+	nextTetro = 0;
+	wait = 0;
+	holdTetro = -1;
+	nowTetro = 0;
+	lines = 0;
 
-	system("tiTle TETRIS");
+	blink = 0;
+	memset(displayBuffer, 0, sizeof(int) * width * height);
+	memset(block_array, 0, sizeof(int) * width * height);
+	memset(ColorBuffer, 0, sizeof(int) * width * height);
+	memset(Color_array, 0, sizeof(int) * width * height);
+	memset(DestroyLines, 0, sizeof(int) * (static_cast<unsigned long long>(height) - 2));
+	memset(lineBlocks, 0, sizeof(int) * (static_cast<unsigned long long>(height) - 2));
+	contect_count = 0;
 
-	cursorView();
 	srand(time(NULL));
+}
+
+int game() {
 
 	for (int i = 0; i < width * height; i++) {
 		if (i % width == 0 || i % width == width - 1 || i / width == height - 1) {
-			if ( !((i % width == 0 || i % width == width - 1) && i / width < 5) ) {
+			if (!((i % width == 0 || i % width == width - 1) && i / width < 5)) {
 				block_array[i] = 2;
 				Color_array[i] = 8;
 			}
@@ -285,7 +317,6 @@ int main()
 	draw_letter(character, 5, 35 + title_x, title_y, letter, 32, 6);
 	delete[] letter;
 
-
 	setColor(8);
 	gotoxy(22, 22);
 	printf("SPIN : ");
@@ -311,11 +342,15 @@ int main()
 	printf("HARD DROP : ");
 	setColor(3);
 	printf("\"W\", \"SPACE\" ");
-	
+
+	gotoxy(22,2);
+	setColor(3);
+	printf("HIGH SCORE : %d", highScore);
+
 
 	int start_wait = 0;
 	int sw = 15;
-	int colors[7] = {4, 12, 6, 2, 3, 2, 5};
+	int colors[7] = { 4, 12, 6, 2, 3, 2, 5 };
 	while (1) { //gmae start input
 		if (start_wait < 350 * sw) {
 			setColor(0);
@@ -377,20 +412,21 @@ int main()
 				start_wait = 0;
 			}
 		}
-		
+
 		start_wait++;
-		
+
 
 		if (_kbhit()) {
 			if (_getch() == '\r') {
 				break;
 			}
-		} 
-	} 
+		}
+	}
+	PlaySound(TEXT("break.wav"), 0, SND_ASYNC);
 
 	system("cls");
 
-	PlaySound(TEXT("BackgroundMusic.wav"), 0, SND_ASYNC | SND_LOOP);
+	///*PlaySound(TEXT("BackgroundMusic.wav"), 0, SND_ASYNC | SND_LOOP);*/
 
 	int game = 1;
 	while (game) {
@@ -408,29 +444,33 @@ int main()
 			key = 0;
 		}
 
+
+
 		if (key == key_right) {
 			if (falling_tetrominoes->isCollsion(1, 0, 0) == 0) {
 				falling_tetrominoes->x++;
 				getGhost(falling_tetrominoes);
 			}
+			PlaySound(TEXT("change.wav"), 0, SND_ASYNC);
 		}
 		else if (key == key_left) {
 			if (falling_tetrominoes->isCollsion(-1, 0, 0) == 0) {
 				falling_tetrominoes->x--;
 				getGhost(falling_tetrominoes);
 			}
-				
+			PlaySound(TEXT("change.wav"), 0, SND_ASYNC);
 		}
 		else if (key == key_up) { // right rotate
 			if (falling_tetrominoes->isCollsion(0, 0, 1) == 0) {
 				falling_tetrominoes->rotate(1);
+				PlaySound(TEXT("change.wav"), 0, SND_ASYNC);
 			}
 			else
 			{
 				falling_tetrominoes->rotate(1);
 
 				int notCollision = 0;
-				for (int i = 1; i <= falling_tetrominoes->size/2; i++) {
+				for (int i = 1; i <= falling_tetrominoes->size / 2; i++) {
 					if (falling_tetrominoes->isCollsion(i, 0, 0) == 0) {
 						notCollision = 1;
 						falling_tetrominoes->x += i;
@@ -438,7 +478,7 @@ int main()
 					}
 				}
 				if (notCollision == 0) {
-					for (int i = 1; i <= falling_tetrominoes->size/2; i++) {
+					for (int i = 1; i <= falling_tetrominoes->size / 2; i++) {
 						if (falling_tetrominoes->isCollsion(-i, 0, 0) == 0) {
 							notCollision = 1;
 							falling_tetrominoes->x -= i;
@@ -450,6 +490,9 @@ int main()
 				if (notCollision == 0) {
 					falling_tetrominoes->rotate(-1);
 				}
+				else {
+					PlaySound(TEXT("change.wav"), 0, SND_ASYNC);
+				}
 			}
 
 			getGhost(falling_tetrominoes);
@@ -457,6 +500,7 @@ int main()
 		else if (key == key_down) { // left rotate
 			if (falling_tetrominoes->isCollsion(0, 0, -1) == 0) {
 				falling_tetrominoes->rotate(-1);
+				PlaySound(TEXT("change.wav"), 0, SND_ASYNC);
 			}
 			else
 			{
@@ -482,6 +526,9 @@ int main()
 
 				if (notCollision == 0) {
 					falling_tetrominoes->rotate(1);
+				}
+				else {
+					PlaySound(TEXT("change.wav"), 0, SND_ASYNC);
 				}
 			}
 
@@ -526,9 +573,13 @@ int main()
 			score += 20;
 
 			checkLine();
+
+			PlaySound(TEXT("drop.wav"), 0, SND_ASYNC);
 		}
 		else if (key == hold) {
 			if (nowTetro != holdTetro) {
+				PlaySound(TEXT("swipe.wav"), 0, SND_ASYNC);
+
 				if (holdTetro >= 0) {
 					falling_tetrominoes->clone(tetrominoes_array[holdTetro]);
 					getGhost(falling_tetrominoes);
@@ -566,11 +617,11 @@ int main()
 
 					nextTetro = index;
 				}
-				
+
 			}
 		}
 
-		
+
 		level_next = (level) * (level) * 250;
 		if (score >= level_next) {
 			level++;
@@ -578,8 +629,8 @@ int main()
 				delay = (int)(delay / 1.5);
 			}
 		}
-		 
-		if (timer >= delay && !isBreaking) {
+
+		if (timer >= delay) {
 			if (falling_tetrominoes->isCollsion(0, 1, 0) == 0) {
 				falling_tetrominoes->y++;
 				getGhost(falling_tetrominoes);
@@ -589,12 +640,12 @@ int main()
 				wait = 1;
 			}
 			timer = 0;
-		} 
+		}
 		if (!isBreaking) {
 			timer++;
 		}
 
-		if (wait && !isBreaking) {
+		if (wait) {
 			timer3++;
 			if (timer3 > 20 && falling_tetrominoes->isCollsion(0, 1, 0)) {
 
@@ -643,6 +694,8 @@ int main()
 				destroyLine();
 
 				getGhost(falling_tetrominoes);
+
+				PlaySound(TEXT("break.wav"), 0, SND_ASYNC);
 			}
 			else {
 				for (int i = 0; i < contect_count; i++) {
@@ -696,7 +749,7 @@ int main()
 			timer2 = 0;
 		}timer2++;
 
-	
+
 		for (int i = 0; i < falling_tetrominoes->length && !isBreaking && game; i++) {
 			int index = falling_tetrominoes->blocks[i];
 			int x = falling_tetrominoes->x + index % falling_tetrominoes->size;
@@ -707,7 +760,7 @@ int main()
 					ColorBuffer[x + y * width] = falling_tetrominoes->color;
 				}
 			}
-			
+
 			y -= checkSinkY;
 			if (!(x < 0 || x > width || y < 0 || y > height)) {
 				displayBuffer[x + y * width] = 1;
@@ -768,32 +821,101 @@ int main()
 		printf("NEXT : %d", level_next);
 		gotoxy(23 + width, 22);
 		printf("LINES : %d", lines);
-		
+
 		draw(width, height, displayBuffer, block_array);
 
 		Sleep(1);
-
 	}
 
 	PlaySound(TEXT("gameover.wav"), 0, SND_FILENAME | SNAPSHOT_POLICY_ALWAYS);
 
-	setColor(12);
+	return key;
+}
 
-	for (int i = 0; i < 120000; i++) {
-		if (i % 20000 < 10000) {
-			gotoxy(23 + width, 26);
-			printf("  GAME OVER    \n\n\n\n\n");
-		}
-		else
-		{
-			gotoxy(23 + width, 26);
-			printf("               \n\n\n\n\n");
-		}
+int main()
+{
+	/* { move: <-, ->, rotate : up_arrow, s, drop : w, move down : down_arrow, hold : tap } */
+	
+
+	ifstream fin("highScore.txt");
+	if (!fin) {
+		printf("파일 열기를 실패...");
+		return 0;
 	}
-	gotoxy(23 + width, 26);
-	printf("  GAME OVER    \n\n\n\n\n");
 
-	setColor(8);
+	fin >> highScore;
+
+	fin.close();
+
+	system("tiTle TETRIS");
+
+	cursorView();
+
+	while (1) {
+		initialize();
+		
+		int input;
+		input = game();
+
+		
+		if (score > highScore) {
+			ofstream fout("highScore.txt");
+			if (!fout) {
+				printf("파일 열기를 실패...");
+				return 0;
+			}
+
+			fout << score;
+
+			fout.close();
+		}
+
+		int i = 0;
+		while (1) {	
+			if (i % 10000 < 5000) {
+				gotoxy(23 + width, 26);
+				setColor(12);
+				printf("  GAME OVER    \n\n\n\n\n");
+
+				if (score > highScore) {
+					gotoxy(23 + width, 24);
+					setColor(3);
+					printf("  NEW SCORE    \n\n\n\n\n");
+				}
+			}
+			else
+			{
+				gotoxy(23 + width, 26);
+				printf("               \n\n\n\n\n");
+				gotoxy(23 + width, 24);
+				printf("               \n\n\n\n\n");
+			}
+			if (i == 10000) {
+				i = 0;
+			}
+
+			if (_kbhit()) {
+				input = _getch();
+			}
+			else {
+				input = 0;
+			}
+
+			if (input == '\r') {
+				PlaySound(TEXT("drop.wav"), 0, SND_ASYNC);
+				break;
+			}
+
+			i++;
+		}
+
+		if (score > highScore) {
+			highScore = score;
+		}
+
+		setColor(8);
+		system("cls");
+	}
 
 	return 0;
 }
@@ -926,45 +1048,26 @@ void spawn(Tetrominoes* falling_tetrominoes, int* game) {
 		}
 	}
 
-	falling_tetrominoes->y -= up;
-	if (up > 0) {
+	
+	nextTetro = index;
+
+	int notCollision = 0;
+	if (up > 0 && spawnMoveable) {
+		for (int i = width-1; i > 0 - 1; i--) {
+			if (falling_tetrominoes->isCollsion(i - falling_tetrominoes->x, 0, 0) == 0) {
+				notCollision = 1;
+				falling_tetrominoes->x = i;
+				break;
+			}
+		}
+	}
+
+	if (notCollision == 0 && up > 0) {
+		falling_tetrominoes->y -= up;
+
 		falling_tetrominoes->build();
 		draw(width, height, displayBuffer, block_array);
 		*game = 0;
 		return;
 	}
-
-	
-	nextTetro = index;
-
-
-
-	//int notCollision = 0;
-
-	//if (falling_tetrominoes->isCollsion(0, 0, 0) == 0) {
-	//	notCollision = 1;
-	//}
-
-	//if (notCollision == 0) {
-	//	for (int i = 1; i < width - 1; i++) {
-	//		if (falling_tetrominoes->isCollsion(i - falling_tetrominoes->x, 0, 0) == 0) {
-	//			notCollision = 1;
-	//			falling_tetrominoes->x = i;
-	//			break;
-	//		}
-	//	}
-	//}
-
-	/*if (notCollision == 0) {
-		for (int i = 0; i < falling_tetrominoes->size; i++) {
-			if (falling_tetrominoes->isCollsion(0, -1, 0)) {
-				falling_tetrominoes->y--;
-			}
-			else
-			{
-				break;
-			}
-		}
-		*game = 0;
-	}*/
 }
